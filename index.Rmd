@@ -1,0 +1,256 @@
+---
+title: "Exploratory data analysis of the Kennebec River discharge rates"
+author: "Manny Gimond"
+output: 
+   html_document:
+     code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+------------------------------------------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+> What follows is an example of an exploratory analysis of the Kennebec River (Maine, USA) discharge rates over time. This analysis is conducted in the spirit of [John Tukey](https://en.wikipedia.org/wiki/John_Tukey) in that it leverages both re-expression and robustness in teasing out trends in the data.
+>
+> The data were pulled from the USGS. The gage station site id is `01049500` and is located in [Gardiner , Maine (USA)](https://waterdata.usgs.gov/monitoring-location/01049500/#parameterCode=00065&period=P7D). The data span the years 1976 through 2020.
+>
+> ![](Kennebec_watershed.png){width="197"}
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+dat <- readRDS("Kennebec.Rds")
+```
+
+## Initial plot
+
+An initial plot of the discharge rate (in ft^3^/s) follows.
+
+```{r fig.width = 6, fig.height = 2.5}
+ggplot(dat, aes(Date, Discharge)) + geom_line() +
+  ylab("Discharge (ft3/s)")
+```
+
+The `Discharge` data seem to exhibit a strong skew. We can check its distribution using a boxplot.
+
+```{r fig.width = 3, fig.height = 1.2}
+ggplot(dat, aes(y = "", x = Discharge)) + geom_boxplot() + ylab("") + xlab("Discharge (ft3/s)")
+```
+
+A skewed data can bias the results of the analysis in favor of a small percentage of the observations while missing out on what the bulk of the data may be saying about the underlying process. A re-expression of the `Discharge` variable is therefore strongly recommended.
+
+## Re-expressing the data
+
+A re-expression using a power of `1/5` seems to do a nice job in rendering a symmetrical distribution.
+
+```{r fig.width = 3, fig.height = 1.2}
+dat$disp02 <- dat$Discharge^(1/5)
+ggplot(dat, aes(y = "", x = disp02)) + geom_boxplot() + 
+  ylab("")  + xlab("Discharge (ft3/s)^0.2")
+```
+
+Note that another way to view the distribution is to keep the original values and scale the grid.
+
+```{r fig.width = 3, fig.height = 1.2}
+ggplot(dat, aes(y = "", x = Discharge)) + geom_boxplot() + ylab("")  + coord_trans(x = scales::boxcox_trans(1/5)) +
+  xlab("Discharge (ft3/s)")
+```
+
+```{r fig.width = 6, fig.height = 1.5}
+ggplot(dat, aes(Date, disp02)) + geom_line() +
+  ylab("Discharge (ft3/s)^0.2")
+```
+
+> NOTE: A robust linear model such as `MASS::rlm` is robust to outliers in a data, but not necessarily robust to skewed data. This is because the `MASS::rlm`, like its `lm` counterpart, makes use of the mean and standard deviation to characterize the distribution of values. So a re-expression is strongly recommended when using parametric models.
+
+## Exploring an overall trend
+
+Given that any 45 year trend has a variability that seems much smaller than the overall variability in the data, we'll fit a loess to help guide our choice of a parametric model. We'll plot both a traditional loess and a robust loess.
+
+```{r fig.width = 6, fig.height = 1.5}
+ggplot(dat, aes(Date, disp02)) + geom_line() +
+  ylab("Discharge (ft3/s)^0.2") + 
+  geom_smooth(method = "loess", se = FALSE)+ 
+  geom_smooth(method = "loess", se = FALSE, col = "red",
+              method.args = list(family = "symmetric"))
+```
+
+There is no significant difference between the traditional loess (blue line) and the robust loess (red line) which suggest that any outlier in the data does not seem to wield a disproportionate influence on the model fit.
+
+The smooths' shape is difficult to make out given the range of y axis values. We'll re-plot the data using a smaller y-axis range.
+
+```{r fig.width = 6, fig.height = 1.5}
+ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
+  ylab("Discharge (ft3/s)^0.2") + 
+  geom_smooth(method = "loess", se = FALSE) +
+  coord_cartesian(ylim = c(2.75, 3.25))
+```
+
+Another approach to fitting a smooth to a noisy dataset is to aggregate the data across the range of x values. In this example, we summarize the discharge values by year.
+
+```{r fig.width = 6, fig.height = 1.5}
+
+dat.sub <- dat %>% 
+  mutate(year.int = as.integer(year(Date))) %>% 
+  group_by(year.int) %>% 
+  summarise(med = median(disp02, na.rm = TRUE))
+
+ggplot(dat.sub, aes(year.int, med)) + geom_point() + 
+  geom_smooth(method = "loess", se = FALSE, col = "blue") +
+  xlab("Year")
+
+```
+
+In both cases, the patterns appear similar with a relatively linear discharge rate between the years 1975 and 1998 and a parabolic shape between 1998 and 2020.
+
+There are at least two approaches that can be taken in modeling the observed trend using a parametric mode: split the data into two parts and model each trend separately (i.e. pre and post 1998), or fit an overall model. We'll adopt the latter. This will help us quantify an "overall" change in discharge even though the change may not be monotonic across all years using. We'll fi a 1^st^ order polynomial model using both a regular `lm` model and the `MASS` package's robust `rlm` model.
+
+```{r fig.width = 6, fig.height = 2.0}
+ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
+  ylab("Discharge (ft3/s)^0.2") + 
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_smooth(method = MASS::rlm, se = FALSE, col = "red")  +
+  coord_cartesian(ylim = c(2.5, 3.5))
+```
+
+The slopes between both the regular and robust regression models are different. This suggests that outliers in the data may be wielding a disproportionate influence on the data (this was not the case with the loess fit). We'll adopt the robust model's output in this analysis
+
+```{r}
+M1 <- MASS::rlm(disp02 ~ decimal_date(Date), dat)
+```
+
+The modeled line is of the form $Discharge^{1/5} = a + b(Year)$ with $b$ = `r round(M1$coefficients[2], 4)` representing the average increase in discharge per year when expressed as a power of `0.2`. The overall trend (across all 44 years) explains about 0.20 (ft^3^/s)^(0.2)^ of the variability in the data, or, when expressing the value back to the linear scale, 0.20^5^ = 0.0003 ft^3^/s --a very small fraction of the overall variability in the data.
+
+## Exploring the residuals
+
+To properly explore the residuals for seasonal periodicity, we need to remove any multi-year patterns in the data. This is best performed using a loess. After exploring different loess spans, a span width of 0.3 was chosen.
+
+```{r fig.width = 6, fig.height = 1.5}
+ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
+  ylab("Discharge (ft3/s)^0.2") + 
+  geom_smooth(method = "loess", se = FALSE, span = 0.3) +
+  coord_cartesian(ylim = c(2.5, 3.5))
+```
+
+```{r}
+L1 <- loess(disp02 ~ decimal_date(Date), dat, span = 0.3)
+dat$res1 <- L1$residuals
+```
+
+The residual plot follows:
+
+```{r fig.width = 6, fig.height = 1.5}
+ggplot(dat, aes(Date, res1)) + geom_line() +
+  ylab("Residuals") 
+```
+
+## Exploring annual periodicity
+
+The following plot groups the data by month of the year.
+
+```{r fig.width = 6.5, fig.height = 2.5}
+dat$month <- month(dat$Date, label = TRUE)
+
+ggplot(dat, aes(month, res1)) + geom_boxplot() +
+  ylab("Residuals") 
+```
+
+A seasonal component can be clearly discerned from the above boxplots. From the plot, we can deduce that the seasonal component explains about 2.5 (ft^3^/s)^(0.2)^ (or 2.5^5^ \~ 100 ft^3^/s) of the variability in the data--a much bigger spread than that computed from the overall trend that was close to zero.
+
+## Monthly trends
+
+```{r fig.width = 6.5, fig.height = 2.5}
+ggplot(dat, aes(Date, res1)) + geom_point(alpha = 0.1, cex = 0.5) + 
+  facet_wrap(~ month, nrow = 1) + 
+  geom_smooth(method = "lm", se = FALSE,
+              method.args = list(family = "symmetric")) +
+  scale_x_continuous(breaks = c(as.Date("1976-1-1"), as.Date("2020-1-1")), label = c("1977", "2020")) +
+  theme(axis.text.x.bottom = element_text(angle = -45, size = 7, hjust = -0.3))
+```
+
+There seems to be an uptick in the rates of discharge for the winter months and a decrease in discharge for the spring months. This suggests an increase in amplitude for the winter/spring months, or an offset in amplitude.
+
+## What can explain the change in amplitude?
+
+Next, we'll create a new variable, `day`, that will give us the day of the year. This will allow us to construct a three dimensional dataset with day and year mapped to the x and y axes respectively, and the residuals mapped to the z axis. The latter will be visualized using either contours or filled tiles (or both).
+
+```{r fig.height = 5, fig.width=5}
+# heat map of residual by day
+dat.tile <- dat %>% 
+  group_by(year = as.integer(year(Date)), day = yday(Date)) %>% 
+  summarise(res1m = median(res1))
+
+
+ggplot(dat.tile, aes(x = day, y = year, fill = res1m)) +
+  geom_tile() + 
+ # scale_fill_gradient2(low="green", mid = "yellow", high = "red",
+ #                      midpoint = 0)
+  scico::scale_fill_scico(palette = "vik", direction = -1, name = "Residual Discharge")
+
+```
+
+Given that we have quite a bit of noise in the data that may be suppressing the seasonal pattern, it may be best to apply a smooth to the data. Here, we'll adopt a loess smoot. A  loess span of `0.2` is adopted to help capture small (time) scale variations on the data. To avoid edge effects at the beginning and end of each year, the data are wrapped. But wrapping is not applied to the ends of the date ranges (i.e. prior to 1976 and after 2020).
+
+
+```{r fig.height = 5, fig.width=5}
+dat.tile.pre <- dat.tile %>% 
+  filter(day > 250) %>% 
+  mutate(year = year + 1,
+         day = day - 366) 
+
+dat.tile.post <- dat.tile %>% 
+  filter(day < 100) %>% 
+  mutate(year = year - 1,
+         day = day + 366)
+
+dat.tile.wrap <- rbind(dat.tile, dat.tile.pre, dat.tile.post)
+
+l3d <- loess(res1m ~ year + day, dat.tile.wrap, span = 0.2,
+             family = "symmetric", degree = 2)
+
+
+smooth.df <- data.frame(l3d$x, l3d$fitted) %>% 
+  filter(day > 0 & day < 366)
+
+
+#dat.tile$loess <- l3d$fitted  # Note that we are extracting the loess fitted model
+                              # and not the loess residuals. But recall that the
+                              # data being modeled are the discharge residuals
+
+  ggplot(smooth.df) + aes( day , year, 
+                           fill = l3d.fitted,
+                           z = l3d.fitted) + 
+  geom_raster(interpolate = TRUE) +
+  scico::scale_fill_scico(palette = "vik", direction = -1, name = "Residual Discharge") +
+  geom_contour(size = 0.2, color = "#EE9A00", 
+               breaks = seq(-0.5, 0.5, by = 0.1)) +
+  geom_vline(xintercept  = c(80, 172, 264), col = "grey90", lty=2 ) +
+  scale_x_continuous(breaks = c(80, 172, 264),
+                     labels = c("Mar 21", "Jun 21", "Sep 21"), 
+                     name = NULL) 
+
+```
+
+The smoothed surface has helped us identify a shift in spring river discharge towards earlier months over the last 5 years. Note  relatively low discharge rates for the winter months between 1980 and 1990 (white hues). We're also observing two periods of lower than normal discharge rates for the months of summer: first period being between 1990 and 2000, and the second one being between 2010 and 2020.
+
+## Summary
+
+The overall (44 year) trend in discharge rates is a very small contributor to the observed variability in the data. The seasonal component explains about 100 ft^3^/s of the overall variability. The largest contributor to variability appears to be random fluctuations in rates.
+
+We've also observed a seasonal shift towards winter months in winter/spring discharge rates. This shift is not observed for the summer and early fall months.
+
+Note that had the analysis not been conducted on a re-expressed dataset, the results would have been biased in favor of the extreme discharge rates. Here, the robust lm suggests an increase of 2.2 ft^3^/s per year--a much greater increase than what was observed with the re-expressed version of the data. This trend is probably more reflective of the trends in extreme discharges in the upper range of values and not the bulk of discharge values.
+
+```{r fig.width = 6, fig.height = 2.0}
+ggplot(dat, aes(Date, Discharge)) + geom_line(alpha = 0.2) +
+  ylab("Discharge (ft3/s)") + 
+  geom_smooth(method = "lm", se = FALSE)  +
+  geom_smooth(method = MASS::rlm, se = FALSE, col = "red")  +
+  coord_cartesian(ylim = c(0,500))
+```
