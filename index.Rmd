@@ -37,13 +37,13 @@ ggplot(dat, aes(Date, Discharge)) + geom_line() +
   ylab("Discharge (ft3/s)")
 ```
 
-The `Discharge` data seem to exhibit a strong skew. We can check its distribution using a boxplot.
+The data exhibit a strong skew. We can check its distribution using a boxplot.
 
 ```{r fig.width = 3, fig.height = 1.2}
 ggplot(dat, aes(y = "", x = Discharge)) + geom_boxplot() + ylab("") + xlab("Discharge (ft3/s)")
 ```
 
-A skewed data can bias the results of the analysis in favor of a small percentage of the observations while missing out on what the bulk of the data may be saying about the underlying process. A re-expression of the `Discharge` variable is therefore strongly recommended.
+A skewed data can bias the results of the analysis in favor of a small percentage of the observations while missing out on what the bulk of the data may be saying about the underlying process. A re-expression of the data is therefore strongly recommended.
 
 ## Re-expressing the data
 
@@ -55,23 +55,24 @@ ggplot(dat, aes(y = "", x = disp02)) + geom_boxplot() +
   ylab("")  + xlab("Discharge (ft3/s)^0.2")
 ```
 
-Note that another way to view the distribution is to keep the original values and scale the grid.
+Note that another way to plot the distribution is to keep the original values and scale the grid.
 
 ```{r fig.width = 3, fig.height = 1.2}
 ggplot(dat, aes(y = "", x = Discharge)) + geom_boxplot() + ylab("")  + coord_trans(x = scales::boxcox_trans(1/5)) +
   xlab("Discharge (ft3/s)")
 ```
 
+Here's a plot of the re-expressed discharge over time.
+
 ```{r fig.width = 6, fig.height = 1.5}
 ggplot(dat, aes(Date, disp02)) + geom_line() +
   ylab("Discharge (ft3/s)^0.2")
 ```
 
-> NOTE: A robust linear model such as `MASS::rlm` is robust to outliers in a data, but not necessarily robust to skewed data. This is because the `MASS::rlm`, like its `lm` counterpart, makes use of the mean and standard deviation to characterize the distribution of values. So a re-expression is strongly recommended when using parametric models.
 
 ## Exploring an overall trend
 
-Given that any 45 year trend has a variability that seems much smaller than the overall variability in the data, we'll fit a loess to help guide our choice of a parametric model. We'll plot both a traditional loess and a robust loess.
+Given that an overall trend has a variability that seems much smaller than the total variability in the data, we'll fit a loess to help guide our choice of a parametric model. We'll plot both a traditional loess and a robust loess.
 
 ```{r fig.width = 6, fig.height = 1.5}
 ggplot(dat, aes(Date, disp02)) + geom_line() +
@@ -92,7 +93,7 @@ ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
   coord_cartesian(ylim = c(2.75, 3.25))
 ```
 
-Another approach to fitting a smooth to a noisy dataset is to aggregate the data across the range of x values. In this example, we summarize the discharge values by year.
+Another approach to fitting a smooth to a noisy dataset is to aggregate the data across the range of x values. In this example, we summarize the discharge values by year. We'll use the median as the summary statistic.
 
 ```{r fig.width = 6, fig.height = 1.5}
 
@@ -109,7 +110,7 @@ ggplot(dat.sub, aes(year.int, med)) + geom_point() +
 
 In both cases, the patterns appear similar with a relatively linear discharge rate between the years 1975 and 1998 and a parabolic shape between 1998 and 2020.
 
-There are at least two approaches that can be taken in modeling the observed trend using a parametric mode: split the data into two parts and model each trend separately (i.e. pre and post 1998), or fit an overall model. We'll adopt the latter. This will help us quantify an "overall" change in discharge even though the change may not be monotonic across all years using. We'll fi a 1^st^ order polynomial model using both a regular `lm` model and the `MASS` package's robust `rlm` model.
+There are at least two approaches that can be taken in modeling our observed trend when using a parametric mode: split the data into two parts and model each trend separately (i.e. pre and post 1998), or fit an overall model. We'll adopt the latter. This will help us quantify an "overall" change in discharge even though the change may not be monotonic across all years using. We'll fit a 1^st^ order polynomial model using both a regular `lm` model and the `MASS` package's robust `rlm` model.
 
 ```{r fig.width = 6, fig.height = 2.0}
 ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
@@ -129,7 +130,7 @@ The modeled line is of the form $Discharge^{1/5} = a + b(Year)$ with $b$ = `r ro
 
 ## Exploring the residuals
 
-To properly explore the residuals for seasonal periodicity, we need to remove any multi-year patterns in the data. This is best performed using a loess. After exploring different loess spans, a span width of 0.3 was chosen.
+To properly explore the residuals for seasonal periodicity, we need to remove any multi-year patterns in the data. This is best performed using a loess. After exploring different loess spans, a span width of 0.3 was chosen. This is a smaller span that that used earlier when we modeled the overall trend (recall that we are seeking to remove multi-year patterns in this phase of the analysis).
 
 ```{r fig.width = 6, fig.height = 1.5}
 ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
@@ -161,7 +162,7 @@ ggplot(dat, aes(month, res1)) + geom_boxplot() +
   ylab("Residuals") 
 ```
 
-A seasonal component can be clearly discerned from the above boxplots. From the plot, we can deduce that the seasonal component explains about 2.5 (ft^3^/s)^(0.2)^ (or 2.5^5^ \~ 100 ft^3^/s) of the variability in the data--a much bigger spread than that computed from the overall trend that was close to zero.
+A seasonal component can be clearly discerned from the above boxplots. From the plot, we can deduce that the seasonal component explains about 2.5 (ft^3^/s)^(0.2)^ (or 2.5^5^ \~ 100 ft^3^/s) of the variability in the data--a much bigger spread than that computed from the overall trend.
 
 ## Monthly trends
 
@@ -237,7 +238,7 @@ smooth.df <- data.frame(l3d$x, l3d$fitted) %>%
 
 ```
 
-The smoothed surface has helped us identify a shift in spring river discharge towards earlier months over the last 5 years. Note  relatively low discharge rates for the winter months between 1980 and 1990 (white hues). We're also observing two periods of lower than normal discharge rates for the months of summer: first period being between 1990 and 2000, and the second one being between 2010 and 2020.
+The smoothed surface has helped us identify a shift in spring river discharge towards earlier months (though a lull in spring discharge is observed for the time period between 2005 and 2015). 
 
 ## Summary
 
@@ -245,7 +246,7 @@ The overall (44 year) trend in discharge rates is a very small contributor to th
 
 We've also observed a seasonal shift towards winter months in winter/spring discharge rates. This shift is not observed for the summer and early fall months.
 
-Note that had the analysis not been conducted on a re-expressed dataset, the results would have been biased in favor of the extreme discharge rates. Here, the robust lm suggests an increase of 2.2 ft^3^/s per year--a much greater increase than what was observed with the re-expressed version of the data. This trend is probably more reflective of the trends in extreme discharges in the upper range of values and not the bulk of discharge values.
+Note that had the analysis not been conducted on a re-expressed dataset, the results would have been biased in favor of the extreme discharge rates. Here, the robust `lm` suggests an increase of 2.2 ft^3^/s per year--a much greater increase than what was observed with the re-expressed version of the data. This trend is probably more reflective of the trends in extreme discharges in the upper range of values and not the bulk of discharge values.
 
 ```{r fig.width = 6, fig.height = 2.0}
 ggplot(dat, aes(Date, Discharge)) + geom_line(alpha = 0.2) +
