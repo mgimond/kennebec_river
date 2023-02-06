@@ -130,7 +130,7 @@ The modeled line is of the form $Discharge^{1/5} = a + b(Year)$ with $b$ = `r ro
 
 ## Exploring the residuals
 
-To properly explore the residuals for seasonal periodicity, we need to remove any multi-year patterns in the data. This is best performed using a loess. After exploring different loess spans, a span width of 0.3 was chosen. This is a smaller span that that used earlier when we modeled the overall trend (recall that we are seeking to remove multi-year patterns in this phase of the analysis).
+To properly explore the residuals for seasonal periodicity, we need to remove any multi-year patterns in the data. This is best performed using a loess. After exploring different loess spans, a span width of 0.3 was chosen. This is a smaller span than that used earlier when we modeled the overall trend (recall that we are seeking to remove multi-year patterns in this phase of the analysis).
 
 ```{r fig.width = 6, fig.height = 1.5}
 ggplot(dat, aes(Date, disp02)) + geom_line(alpha = 0.2) +
