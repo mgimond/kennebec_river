@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 
 > What follows is an example of an exploratory analysis of the Kennebec River (Maine, USA) discharge rates over time. This analysis is conducted in the spirit of [John Tukey](https://en.wikipedia.org/wiki/John_Tukey) in that it leverages both re-expression and robustness in teasing out trends in the data.
 >
-> The data were pulled from the USGS. The gage station site id is `01049500` and is located in [Gardiner , Maine (USA)](https://waterdata.usgs.gov/monitoring-location/01049500/#parameterCode=00065&period=P7D). The data span the years 1976 through 2022.
+> The data were pulled from the USGS. The gage station site id is `01049500` and is located in [Gardiner , Maine (USA)](https://waterdata.usgs.gov/monitoring-location/01049500/#parameterCode=00065&period=P7D). The data span the years 1976 through 2023.
 >
 > ![](Kennebec_watershed.png){width="197"}
 
@@ -108,7 +108,7 @@ ggplot(dat.sub, aes(year.int, med)) + geom_point() +
 
 ```
 
-In both cases, the patterns appear similar with a relatively linear discharge rate between the years 1975 and 1998 and a parabolic shape between 1998 and 2022.
+In both cases, the patterns appear similar with a relatively linear discharge rate between the years 1975 and 1998 and a parabolic shape between 1998 and 2023.
 
 There are at least two approaches that can be taken in modeling our observed trend when using a parametric mode: split the data into two parts and model each trend separately (i.e. pre and post 1998), or fit an overall model. We'll adopt the latter. This will help us quantify an "overall" change in discharge even though the change may not be monotonic across all years using. We'll fit a 1^st^ order polynomial model using both a regular `lm` model and the `MASS` package's robust `rlm` model.
 
@@ -171,7 +171,7 @@ ggplot(dat, aes(Date, res1)) + geom_point(alpha = 0.1, cex = 0.5) +
   facet_wrap(~ month, nrow = 1) + 
   geom_smooth(method = "lm", se = FALSE,
               method.args = list(family = "symmetric")) +
-  scale_x_continuous(breaks = c(as.Date("1976-1-1"), as.Date("2022-1-1")), label = c("1977", "2022")) +
+  scale_x_continuous(breaks = c(as.Date("1976-1-1"), as.Date("2023-1-1")), label = c("1977", "2023")) +
   theme(axis.text.x.bottom = element_text(angle = -45, size = 7, hjust = -0.3))
 ```
 
@@ -196,7 +196,7 @@ ggplot(dat.tile, aes(x = day, y = year, fill = res1m)) +
 
 ```
 
-Given that we have quite a bit of noise in the data that may be suppressing the seasonal pattern, it may be best to apply a smooth to the data. Here, we'll adopt a loess smooth. A  loess span of `0.2` is adopted to help capture small (time) scale variations on the data. To avoid edge effects at the beginning and end of each year, the data are wrapped. But wrapping is not applied to the ends of the date ranges (i.e. prior to 1976 and after 2022).
+Given that we have quite a bit of noise in the data that may be suppressing the seasonal pattern, it may be best to apply a smooth to the data. Here, we'll adopt a loess smooth. A  loess span of `0.2` is adopted to help capture small (time) scale variations on the data. To avoid edge effects at the beginning and end of each year, the data are wrapped. But wrapping is not applied to the ends of the date ranges (i.e. prior to 1976 and after 2023).
 
 
 ```{r fig.height = 5, fig.width=5}
